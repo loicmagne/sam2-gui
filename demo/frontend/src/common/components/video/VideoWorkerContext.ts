@@ -33,7 +33,6 @@ import Logger from '@/common/logger/Logger';
 import {Mask, SegmentationPoint, Tracklet} from '@/common/tracker/Tracker';
 import {streamFile} from '@/common/utils/FileUtils';
 import {Stats} from '@/debug/stats/Stats';
-import {VIDEO_WATERMARK_TEXT} from '@/demo/DemoConfig';
 import CreateFilmstripError from '@/graphql/errors/CreateFilmstripError';
 import DrawFrameError from '@/graphql/errors/DrawFrameError';
 import WebGLContextError from '@/graphql/errors/WebGLContextError';
@@ -72,9 +71,6 @@ export type FrameInfo = {
   tracklet: Tracklet;
   mask: Mask;
 };
-
-const WATERMARK_BOX_HORIZONTAL_PADDING = 10;
-const WATERMARK_BOX_VERTICAL_PADDING = 10;
 
 export type VideoStats = {
   fps?: Stats;
@@ -129,10 +125,6 @@ export default class VideoWorkerContext {
       AllEffects.Original, // Image as background
       AllEffects.Overlay, // Masks on top
     ];
-
-    // Loading watermark fonts. This is going to be async, but by the time of
-    // video encoding, the fonts should be available.
-    this._loadWatermarkFonts();
   }
 
   private initializeWebGLContext(width: number, height: number): void {
@@ -425,7 +417,7 @@ export default class VideoWorkerContext {
     const frames = decodedVideo.frames;
 
     for (let frameIndex = 0; frameIndex < frames.length; ++frameIndex) {
-      await this._drawFrameImpl(form, frameIndex, true);
+      await this._drawFrameImpl(form, frameIndex);
 
       const frame = frames[frameIndex];
       const videoFrame = new VideoFrame(canvas, {
@@ -611,7 +603,6 @@ export default class VideoWorkerContext {
   private async _drawFrameImpl(
     form: CanvasForm,
     frameIndex: number,
-    enableWatermark: boolean = false,
     step: number = 0,
     maxSteps: number = 40,
   ): Promise<void> {
@@ -692,14 +683,10 @@ export default class VideoWorkerContext {
         // Use RAF to draw frame, and update the display,
         // this avoids to wait until the javascript call stack is cleared.
         requestAnimationFrame(() =>
-          this._drawFrameImpl(form, frameIndex, false, step + 1, maxSteps),
+          this._drawFrameImpl(form, frameIndex, step + 1, maxSteps),
         );
       } else {
         this._processEffects(form, effectParams, tracklets);
-      }
-
-      if (enableWatermark) {
-        this._drawWatermark(form, frameBitmap);
       }
 
       // Do not simply drop the JavaScript reference to the ImageBitmap; doing so
@@ -719,75 +706,10 @@ export default class VideoWorkerContext {
     }
   }
 
-  private _drawWatermark(form: CanvasForm, frameBitmap: ImageBitmap): void {
-    const frameWidth = this._canvas?.width || frameBitmap.width;
-    const frameHeight = this._canvas?.height || frameBitmap.height;
-    // Font size is either 12 or smaller based on available width
-    // since the font is not monospaced, we approximate it'll fit 1.5 more characters than monospaced
-    const approximateFontSize = Math.min(
-      Math.floor(frameWidth / (VIDEO_WATERMARK_TEXT.length / 1.5)),
-      12,
-    );
-
-    form.ctx.font = `${approximateFontSize}px "Inter", sans-serif`;
-    const measureGeneratedBy = form.ctx.measureText(VIDEO_WATERMARK_TEXT);
-
-    const textBoxWidth =
-      measureGeneratedBy.width + 2 * WATERMARK_BOX_HORIZONTAL_PADDING;
-    const textBoxHeight =
-      measureGeneratedBy.actualBoundingBoxAscent +
-      2 * WATERMARK_BOX_VERTICAL_PADDING;
-    const textBoxX = frameWidth - textBoxWidth;
-    const textBoxY = frameHeight - textBoxHeight;
-
-    form.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    form.ctx.beginPath();
-    form.ctx.roundRect(
-      Math.round(textBoxX),
-      Math.round(textBoxY),
-      Math.round(textBoxWidth),
-      Math.round(textBoxHeight),
-      [WATERMARK_BOX_HORIZONTAL_PADDING, 0, 0, 0],
-    );
-    form.ctx.fill();
-
-    // Always reset the text style because some effects may change text styling in the same ctx
-    form.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    form.ctx.textAlign = 'left';
-
-    form.ctx.fillText(
-      VIDEO_WATERMARK_TEXT,
-      Math.round(textBoxX + WATERMARK_BOX_HORIZONTAL_PADDING),
-      Math.round(
-        textBoxY +
-          WATERMARK_BOX_VERTICAL_PADDING +
-          measureGeneratedBy.actualBoundingBoxAscent,
-      ),
-    );
-  }
-
   private updateFrameIndex(index: number): void {
     this._frameIndex = index;
     this.sendResponse<FrameUpdateResponse>('frameUpdate', {
       index,
-    });
-  }
-
-  private _loadWatermarkFonts() {
-    const requiredFonts = [
-      {
-        url: '/fonts/Inter-VariableFont.ttf',
-        format: 'truetype-variations',
-      },
-    ];
-    requiredFonts.forEach(requiredFont => {
-      const fontFace = new FontFace(
-        'Inter',
-        `url(${requiredFont.url}) format('${requiredFont.format}')`,
-      );
-      fontFace.load().then(font => {
-        self.fonts.add(font);
-      });
     });
   }
 
