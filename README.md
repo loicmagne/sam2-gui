@@ -1,3 +1,14 @@
+# SAM2-gui
+
+This fork implements features on top of [Meta's SAM2 demo](https://github.com/facebookresearch/sam2) to properly create segmentation masks for videos. This is not a full blown annotation tool, but it works at a small scale to label a few videos.
+
+Features implemented:
+- [X] Fix the issue where the downloaded output video only has one frame
+- [X] Remove watermark from output
+- [X] Keep the framerate from the original video, instead of downsampling to 24 fps
+- [ ] Allow to download directly a .zip containing binary masks, instead of an .mp4 file
+
+
 # SAM 2: Segment Anything in Images and Videos
 
 **[AI at Meta, FAIR](https://ai.meta.com/research/)**
