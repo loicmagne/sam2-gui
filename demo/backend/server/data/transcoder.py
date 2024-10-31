@@ -164,7 +164,7 @@ def normalize_video(
         "-threads",
         f"{FFMPEG_NUM_THREADS}",  # decode (or filter..?) threads
         "-vf",
-        f"fps={fps},scale={w}:{h},setsar=1:1",
+        f"scale={w}:{h},setsar=1:1",
         "-c:v",
         codec,
         "-crf",
